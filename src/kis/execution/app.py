@@ -238,48 +238,60 @@ async def place_order(
         secret = get_jwt_secret()
         payload = verify_token(token, secret)
     except InvalidTokenSignatureError as e:
-        # Try to decode token without verification to get correlation_id
+        # Try to decode token without verification to get claims (but don't trust them)
         correlation_id = "unknown"
+        proposal_id = None
+        token_jti = None
         try:
             import jwt as jwt_lib
             unverified = jwt_lib.decode(token, options={"verify_signature": False})
             correlation_id = unverified.get("correlation_id", "unknown")
+            proposal_id = unverified.get("proposal_id")
+            token_jti = unverified.get("jti")
         except Exception:
             pass
         
         log_event(
             db,
-            "order_rejected",
+            "order_rejected_auth",
             correlation_id,
             {
-                "reason": "Invalid token signature",
+                "reason": "invalid_signature",
+                "correlation_id": correlation_id,
+                "proposal_id": proposal_id,
+                "token_jti": token_jti,
                 "error": str(e)
             }
         )
+        db.commit()  # Commit event before raising exception
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token signature: {str(e)}"
         )
         # Broker call count remains 0
     except TokenExpiredError as e:
+        # Expired token has valid signature, so we can decode claims
         correlation_id = "unknown"
-        if payload:
-            correlation_id = payload.get("correlation_id", "unknown")
-        else:
-            # Try to decode expired token to get correlation_id
-            try:
-                import jwt as jwt_lib
-                unverified = jwt_lib.decode(token, options={"verify_signature": False, "verify_exp": False})
-                correlation_id = unverified.get("correlation_id", "unknown")
-            except Exception:
-                pass
+        proposal_id = None
+        token_jti = None
+        try:
+            import jwt as jwt_lib
+            unverified = jwt_lib.decode(token, options={"verify_signature": False, "verify_exp": False})
+            correlation_id = unverified.get("correlation_id", "unknown")
+            proposal_id = unverified.get("proposal_id")
+            token_jti = unverified.get("jti")
+        except Exception:
+            pass
         
         log_event(
             db,
-            "order_rejected",
+            "order_rejected_expired",
             correlation_id,
             {
-                "reason": "Token expired",
+                "reason": "expired",
+                "correlation_id": correlation_id,
+                "proposal_id": proposal_id,
+                "token_jti": token_jti,
                 "error": str(e)
             }
         )
@@ -290,24 +302,28 @@ async def place_order(
         )
         # Broker call count remains 0
     except TokenVerificationError as e:
+        # Try to decode token to get claims (but don't trust them)
         correlation_id = "unknown"
-        if payload:
-            correlation_id = payload.get("correlation_id", "unknown")
-        else:
-            # Try to decode token to get correlation_id
-            try:
-                import jwt as jwt_lib
-                unverified = jwt_lib.decode(token, options={"verify_signature": False})
-                correlation_id = unverified.get("correlation_id", "unknown")
-            except Exception:
-                pass
+        proposal_id = None
+        token_jti = None
+        try:
+            import jwt as jwt_lib
+            unverified = jwt_lib.decode(token, options={"verify_signature": False})
+            correlation_id = unverified.get("correlation_id", "unknown")
+            proposal_id = unverified.get("proposal_id")
+            token_jti = unverified.get("jti")
+        except Exception:
+            pass
         
         log_event(
             db,
-            "order_rejected",
+            "order_rejected_auth",
             correlation_id,
             {
-                "reason": "Token verification failed",
+                "reason": "token_verification_failed",
+                "correlation_id": correlation_id,
+                "proposal_id": proposal_id,
+                "token_jti": token_jti,
                 "error": str(e)
             }
         )

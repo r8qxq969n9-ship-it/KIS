@@ -225,12 +225,21 @@ def test_invalid_token_signature(client, test_proposal, test_approval, temp_db):
         Session = sessionmaker(bind=engine)
         session = Session()
         try:
-            events = session.query(EventLog).filter_by(
-                event_type="order_rejected"
+            # Query events with proper filtering
+            events = session.query(EventLog).filter(
+                EventLog.event_type.in_(["order_rejected", "order_rejected_auth"]),
+                EventLog.actor == "execution_server"
             ).all()
-            assert len(events) >= 1
-            # Check that reason mentions signature
-            assert any("signature" in str(e.payload_json).lower() for e in events)
+            assert len(events) >= 1, f"Expected at least 1 event, got {len(events)}"
+            
+            # Check payload for invalid signature reason
+            event_payloads = [e.payload_json for e in events]
+            assert any(
+                payload.get("reason") in ["invalid_signature", "Invalid token signature"]
+                for payload in event_payloads
+            ), f"Event payloads: {event_payloads}"
+            
+            # correlation_id/proposal_id/jti는 unknown/null 허용 (서명 불일치 시 신뢰 불가)
         finally:
             session.close()
     finally:
@@ -304,23 +313,28 @@ def test_expired_token(client, test_proposal, test_approval, temp_db):
         assert response.status_code == 403
         assert spy.call_count == 0  # Broker never called
         
-        # Verify event_log - refresh session to see committed events
+        # Verify event_log
         engine = create_engine(temp_db)
         Session = sessionmaker(bind=engine)
         session = Session()
         try:
-            # Query all events (may need to refresh to see committed events)
-            all_events = session.query(EventLog).all()
-            # If no events found, try querying with filter
-            if len(all_events) == 0:
-                # Wait a bit and retry (for async commit)
-                import time
-                time.sleep(0.1)
-                all_events = session.query(EventLog).all()
-            assert len(all_events) >= 1, f"Expected at least 1 event, got {len(all_events)}. All events: {[e.event_type for e in all_events]}"
-            # Check that reason mentions expired
-            event_payloads = [str(e.payload_json).lower() for e in all_events]
-            assert any("expired" in p for p in event_payloads), f"Event payloads: {event_payloads}"
+            # Query events with proper filtering
+            events = session.query(EventLog).filter(
+                EventLog.event_type.in_(["order_rejected", "order_rejected_expired"]),
+                EventLog.actor == "execution_server"
+            ).all()
+            assert len(events) >= 1, f"Expected at least 1 event, got {len(events)}"
+            
+            # Check payload for expired reason
+            event_payloads = [e.payload_json for e in events]
+            expired_event = next(
+                (e for e in event_payloads if "expired" in str(e.get("reason", "")).lower()),
+                None
+            )
+            assert expired_event is not None, f"No expired event found in: {event_payloads}"
+            
+            # correlation_id는 토큰 claim과 일치해야 함 (만료 토큰은 서명 유효)
+            assert expired_event.get("correlation_id") == "test-correlation-123"
         finally:
             session.close()
     finally:
