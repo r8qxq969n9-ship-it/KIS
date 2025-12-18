@@ -14,16 +14,17 @@ Phase 0은 **모의투자 환경에서 3단 아키텍처(Engine-GUI-Execution)�
 ## 2. In Scope (Phase 0에서 포함)
 
 ### 아키텍처
-- Engine: 시장 데이터 분석 및 Proposal 생성
-- GUI: Proposal 승인/거부 및 정책 설정
-- Execution: 승인된 Proposal만 주문 실행 (승인 토큰/상태 검증 필수)
-- Storage: 데이터 스냅샷, 파라미터, Proposal, 승인, 주문/체결 결과 저장
+- **3단 분리 스캐폴딩**: Engine(분석/Proposal) – GUI(승인/정책) – Execution(주문) 기본 구조 구축
+- **승인 강제(서버)**: Execution Server에서만 주문 API 호출 가능, 승인 토큰 검증 필수
+- **이벤트 로그/스냅샷/감사 저장 스키마 초안**: append-only 이벤트 로그, 데이터 스냅샷, 재현성 보장 스키마 설계
+- **Kill switch**: 기본 메커니즘 구현 (시작 시 기본 ON, 손실/오류/데이터 결측 시 자동 중단)
+- **최소 테스트/게이트**: 각 모듈 단위 테스트 및 통합 테스트, 검증 게이트 통과
 
 ### 기능
 - 모의투자 환경 연동 (실거래 금지)
-- 승인 토큰 기반 주문 실행 제어
+- 승인 토큰 기반 주문 실행 제어 (서버 강제)
 - Kill switch 기본 구현 (손실/오류/데이터 결측 시 자동 중단)
-- 기본 로깅 및 감사 추적
+- 기본 로깅 및 감사 추적 (이벤트 로그 기반)
 
 ### 운영 파라미터 (중립 모드 - 고정값)
 - 연변동성: 12%
@@ -31,23 +32,44 @@ Phase 0은 **모의투자 환경에서 3단 아키텍처(Engine-GUI-Execution)�
 - 최대 종목 수: 20종목
 - 종목당 최대 할당: 8%
 - KR/US 비율: 40/60
-- 리밸런싱 주기: 월 1회
+- 리밸런싱 주기: 월 1회 (트리거/워크플로우 수준만)
 
 ## 3. Out of Scope (Phase 0에서 제외)
 
 ### 금지 사항
 - **실거래 연동 금지**: Phase 0에서는 모의투자만 허용
-- **최적화 작업 금지**: 파라미터 튜닝, 백테스팅 최적화 등은 제외
+- **종목선정/전략 고도화 금지**: 기본 Proposal 생성 로직만 구현, 전략 최적화 제외
+- **최적화/튜닝 금지**: 파라미터 튜닝, 백테스팅 최적화 등은 제외
+- **성과지표 개선 금지**: 수익률, 샤프 비율 등 성과 지표 개선 작업 제외
 - **수익 보장 표현 금지**: 모든 문서/코드/출력에서 수익 보장 관련 표현 사용 금지
 
 ### 제외 기능
 - 실거래 API 연동
+- 종목 선정 알고리즘 고도화
+- 전략 최적화 및 튜닝
 - 파라미터 자동 최적화
 - 백테스팅 엔진
+- 성과 지표 개선 도구
 - 고급 리스크 관리 (기본 Kill switch만 포함)
 - 운영 안전장치 고도화 (로그/알림/롤백/재시작 Runbook은 Phase 1 이후)
 
-## 4. 운영 고정값 (중립 모드)
+## 4. 아키텍처 설계 원칙
+
+### 4.1 서버 강제 아키텍처
+
+**주문 API 호출은 Execution Server(주문 게이트웨이) 단일 컴포넌트에서만 가능하다. 이 서버만 브로커(KIS) API 자격증명(키/시크릿)을 보유한다.**
+
+**Engine 및 GUI는 브로커 API 자격증명을 절대 보유하지 않는다. 승인 없이 브로커 API를 직접 호출하는 경로는 구조적으로 존재하지 않는다.**
+
+**Execution Server는 승인 토큰 검증 실패 시 항상 401/403을 반환하며, 이 경우 브로커 API 호출이 절대 발생하지 않는다(서버 강제).**
+
+### 4.2 모듈 분리 원칙
+- Engine: 시장 데이터 분석 및 Proposal 생성 (브로커 API 자격증명 없음)
+- GUI: Proposal 승인/거부 및 정책 설정 (브로커 API 자격증명 없음)
+- Execution Server: 승인된 Proposal만 주문 실행 (브로커 API 자격증명 보유, 승인 토큰 검증 필수)
+- Storage: 데이터 스냅샷, 파라미터, Proposal, 승인, 주문/체결 결과 저장
+
+## 5. 운영 고정값 (중립 모드)
 
 Phase 0에서는 다음 값들을 고정값으로 사용합니다. 이 값들은 코드에 하드코딩되거나 설정 파일에 명시되어야 하며, Phase 0 동안 변경 불가입니다.
 
@@ -60,28 +82,28 @@ Phase 0에서는 다음 값들을 고정값으로 사용합니다. 이 값들은
 | KR/US 비율 | 40/60 | 한국/미국 시장 비중 |
 | 리밸런싱 주기 | 월 1회 | 포트폴리오 재조정 주기 |
 
-## 5. 검증 게이트
+## 6. 검증 게이트
 
 Phase 0 완료를 위해서는 다음 게이트를 모두 통과해야 합니다.
 
-### 5.1 데이터 게이트
+### 6.1 데이터 게이트
 - [ ] 시장 데이터 수집 및 스냅샷 저장 기능 동작 확인
 - [ ] 데이터 결측 시 Kill switch 작동 확인
 - [ ] 데이터 스키마가 재현성 요구사항을 만족하는지 확인
 
-### 5.2 리스크 게이트
+### 6.2 리스크 게이트
 - [ ] MDD -15% 초과 시 Kill switch 작동 확인
 - [ ] 종목당 8% 할당 제한 준수 확인
 - [ ] 최대 20종목 제한 준수 확인
 - [ ] KR/US 40/60 비율 준수 확인
 
-### 5.3 집행 게이트
+### 6.3 집행 게이트
 - [ ] 승인 없이 주문 API 호출 시도 시 서버에서 거부되는지 확인
 - [ ] 승인 토큰 없이 Execution 모듈이 주문을 실행할 수 없는지 확인
 - [ ] 승인된 Proposal만 주문이 실행되는지 확인
 - [ ] 모의투자 환경에서만 동작하는지 확인 (실거래 API 호출 불가능)
 
-### 5.4 감사 게이트
+### 6.4 감사 게이트
 - [ ] 모든 Proposal이 저장되는지 확인
 - [ ] 모든 승인/거부 결정이 저장되는지 확인
 - [ ] 모든 주문/체결 결과가 저장되는지 확인
@@ -102,6 +124,9 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 ### 6.2 승인 시스템 DoD
 - [ ] GUI에서 승인한 Proposal만 Execution으로 전달됨
 - [ ] 승인 토큰이 생성되고 Execution에 전달됨
+- [ ] 승인 토큰은 서명된 형식(JWT 또는 HMAC 서명 토큰)이며 proposal_id 및 주문 대상(심볼/수량/방향)과 바인딩된다
+- [ ] 승인 토큰은 expires_at(만료)와 jti(토큰 ID)를 가지며 1회성(one-time)으로만 사용 가능하다(재사용 시 403)
+- [ ] DB에는 승인 토큰 원문을 저장하지 않고 token_hash만 저장한다
 - [ ] Execution이 승인 토큰 없이 주문을 시도하면 서버에서 401/403 에러 반환
 - [ ] 승인 상태가 데이터베이스에 저장됨
 
@@ -111,6 +136,7 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - [ ] 모의투자 환경에서 주문/체결이 정상 동작함
 
 ### 6.4 Kill Switch DoD
+- [ ] 시스템 시작 시 kill_switch_status=active가 기본값이며, 운영자 수동 해제 + 사유 기록 없이는 주문이 절대 진행되지 않는다
 - [ ] 손실이 MDD(-15%)를 초과하면 자동으로 모든 거래 중단
 - [ ] 데이터 결측이 발생하면 자동으로 거래 중단
 - [ ] 시스템 오류 발생 시 자동으로 거래 중단
@@ -118,6 +144,8 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - [ ] Kill switch 해제는 수동으로만 가능 (자동 해제 금지)
 
 ### 6.5 데이터 저장/감사 DoD
+- [ ] 모든 주요 상태 변화는 append-only 이벤트 로그로 저장(삭제/수정 금지). correlation_id로 Proposal→승인→주문→체결을 연결한다
+- [ ] Proposal/주문/체결 레코드는 생성 당시 git_commit_sha(또는 build_version), schema_version, config_hash를 함께 저장한다
 - [ ] 시장 데이터 스냅샷이 타임스탬프와 함께 저장됨
 - [ ] 모든 Proposal이 생성 시점, 파라미터, 내용과 함께 저장됨
 - [ ] 모든 승인/거부 결정이 결정자, 시점, 이유와 함께 저장됨
@@ -131,7 +159,7 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - [ ] 최대 20종목 제한이 코드에 구현되어 있음
 - [ ] 종목당 8% 할당 제한이 코드에 구현되어 있음
 - [ ] KR/US 40/60 비율이 코드에 구현되어 있음
-- [ ] 월 1회 리밸런싱 로직이 구현되어 있음
+- [ ] Phase 0에서는 월 1회 리밸런싱 트리거(또는 수동 실행 워크플로우)만 정의하고, Proposal 생성과 승인/집행 파이프라인 검증까지만 수행한다
 
 ### 6.7 테스트 DoD
 - [ ] 각 모듈의 단위 테스트가 작성됨
@@ -142,52 +170,63 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 
 ## 7. 데이터 스키마 초안
 
-재현성과 감사를 위해 다음 데이터를 저장해야 합니다.
+재현성과 감사를 위해 다음 데이터를 저장해야 합니다. 모든 주요 상태 변화는 append-only 이벤트 로그로 저장되며, correlation_id로 Proposal→승인→주문→체결을 연결합니다.
 
-### 7.1 데이터 스냅샷 (market_snapshots)
+### 7.1 이벤트 로그 (event_log)
+- `event_id`: 고유 ID
+- `timestamp`: 이벤트 발생 시점
+- `event_type`: 이벤트 유형 (proposal_created, approval_granted, order_placed, fill_executed 등)
+- `correlation_id`: Proposal→승인→주문→체결을 연결하는 상관관계 ID
+- `actor`: 이벤트를 발생시킨 주체 (engine, gui, execution_server 등)
+- `payload_json`: 이벤트 상세 정보 (JSON)
+- `prev_hash`: 이전 이벤트 해시 (선택, 체인 검증용)
+- `hash`: 현재 이벤트 해시 (선택, 무결성 검증용)
+
+### 7.2 데이터 스냅샷 (snapshots)
 - `snapshot_id`: 고유 ID
-- `timestamp`: 스냅샷 생성 시점
-- `market_data`: 시장 데이터 JSON (가격, 거래량 등)
-- `data_source`: 데이터 출처
+- `asof`: 스냅샷 기준 시점
+- `source`: 데이터 출처
+- `payload_json`: 스냅샷 데이터 (JSON)
 
-### 7.2 Proposal (proposals)
+### 7.3 Proposal (proposals)
 - `proposal_id`: 고유 ID
 - `created_at`: 생성 시점
-- `engine_version`: Engine 버전
-- `parameters`: 사용된 파라미터 JSON
-- `proposal_content`: Proposal 내용 JSON (종목, 비중, 거래 유형 등)
+- `universe_snapshot_id`: 사용된 시장 데이터 스냅샷 ID
+- `config_hash`: 사용된 설정의 해시값
+- `git_commit_sha`: Proposal 생성 시점의 Git 커밋 SHA (또는 build_version)
+- `schema_version`: 스키마 버전
+- `payload_json`: Proposal 내용 JSON (종목, 비중, 거래 유형 등)
 - `status`: 상태 (pending, approved, rejected, executed)
 
-### 7.3 승인 (approvals)
+### 7.4 승인 (approvals)
 - `approval_id`: 고유 ID
 - `proposal_id`: 관련 Proposal ID
-- `approved_at`: 승인 시점
+- `token_hash`: 승인 토큰의 해시값 (원문은 저장하지 않음)
+- `token_expires_at`: 토큰 만료 시점
+- `token_used_at`: 토큰 사용 시점 (nullable, 1회성 사용 확인용)
+- `token_jti`: 토큰 ID (JWT ID)
+- `status`: 승인 상태 (approved, rejected)
 - `approved_by`: 승인자
-- `approval_token`: 승인 토큰 (Execution에서 사용)
+- `approved_at`: 승인 시점
 - `rejection_reason`: 거부 시 사유 (nullable)
 
-### 7.4 주문 (orders)
+### 7.5 주문 (orders)
 - `order_id`: 고유 ID
-- `proposal_id`: 관련 Proposal ID
-- `approval_id`: 관련 승인 ID
-- `approval_token`: 사용된 승인 토큰
-- `order_type`: 주문 유형 (buy, sell)
-- `symbol`: 종목 코드
-- `quantity`: 수량
-- `price`: 가격
-- `order_status`: 주문 상태 (pending, filled, cancelled, rejected)
+- `correlation_id`: Proposal→승인→주문을 연결하는 상관관계 ID
+- `status`: 주문 상태 (pending, filled, cancelled, rejected)
+- `broker_order_id`: 브로커에서 발급한 주문 ID (nullable)
+- `payload_json`: 주문 상세 정보 (JSON: proposal_id, approval_id, symbol, quantity, price, order_type 등)
 - `created_at`: 주문 생성 시점
-- `executed_at`: 체결 시점 (nullable)
 
-### 7.5 체결 (executions)
-- `execution_id`: 고유 ID
+### 7.6 체결 (fills)
+- `fill_id`: 고유 ID
 - `order_id`: 관련 주문 ID
-- `executed_at`: 체결 시점
-- `executed_price`: 체결 가격
-- `executed_quantity`: 체결 수량
-- `execution_type`: 체결 유형 (full, partial)
+- `correlation_id`: Proposal→승인→주문→체결을 연결하는 상관관계 ID
+- `broker_fill_id`: 브로커에서 발급한 체결 ID
+- `payload_json`: 체결 상세 정보 (JSON: executed_price, executed_quantity, executed_at 등)
+- `created_at`: 체결 시점
 
-### 7.6 시스템 상태 (system_state)
+### 7.7 시스템 상태 (system_state)
 - `state_id`: 고유 ID
 - `timestamp`: 상태 기록 시점
 - `kill_switch_status`: Kill switch 상태 (active, inactive)
@@ -195,15 +234,6 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - `portfolio_value`: 포트폴리오 가치
 - `current_mdd`: 현재 MDD
 - `active_positions`: 현재 보유 종목 수
-
-### 7.7 파라미터 변경 이력 (parameter_history)
-- `change_id`: 고유 ID
-- `changed_at`: 변경 시점
-- `changed_by`: 변경자
-- `parameter_name`: 파라미터 이름
-- `old_value`: 이전 값
-- `new_value`: 새 값
-- `change_reason`: 변경 사유
 
 ## 8. 제약사항 및 경고
 
@@ -220,11 +250,12 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - 고급 운영 안전장치(상세 로깅, 알림 시스템, 롤백 메커니즘, 재시작 Runbook)는 Phase 1 이후에 구현됩니다.
 - **운영 안전장치가 완성되기 전까지는 실거래를 진행할 수 없습니다.**
 
-## 9. 다음 단계 (Phase 1 예고)
+## 9. 향후 고려 사항
 
-Phase 0 완료 후 Phase 1에서는 다음을 진행할 예정입니다:
-- 운영 안전장치 고도화 (로그/알림/롤백/재시작 Runbook)
-- 소액 실거래 환경 준비
+Phase 0 완료 후 향후 단계에서 고려할 수 있는 항목들입니다. Phase 0에서는 이러한 항목들을 구현하지 않습니다.
+
+- 운영 안전장치 고도화 (상세 로깅, 알림 시스템, 롤백 메커니즘, 재시작 Runbook)
+- 소액 실거래 환경 준비 (운영 안전장치 완성 후)
 - 파라미터 튜닝 도구 (선택적)
 - 고급 리스크 관리 기능
 

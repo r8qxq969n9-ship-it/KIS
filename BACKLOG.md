@@ -40,17 +40,23 @@
 - 데이터베이스 초기화 스크립트
 - 프로젝트 의존성 파일 (requirements.txt, package.json 등)
 - 기본 설정 파일 (config.yaml 또는 .env.example)
+- event_log 테이블 골격 (append-only 이벤트 로그)
 
 **DoD**:
 - [ ] 3단 아키텍처 디렉토리 구조가 생성됨
 - [ ] 데이터베이스 스키마가 PHASE0_SPEC.md의 스키마 초안을 반영함
+- [ ] event_log 테이블이 correlation_id, event_type, actor, payload_json 필드를 포함함
+- [ ] proposals 테이블이 universe_snapshot_id, config_hash, git_commit_sha, schema_version 필드를 포함함
+- [ ] approvals 테이블이 token_hash, token_expires_at, token_used_at, token_jti 필드를 포함함
+- [ ] orders/fills 테이블이 correlation_id, payload_json 필드를 포함함
 - [ ] 데이터베이스 초기화 스크립트가 정상 실행됨
 - [ ] 프로젝트 의존성이 명시되어 있고 설치 가능함
 - [ ] 기본 설정 파일이 생성됨
 
 **테스트**:
 - 데이터베이스 초기화 스크립트 실행 테스트
-- 스키마가 모든 필수 테이블을 포함하는지 확인
+- 스키마가 모든 필수 테이블을 포함하는지 확인 (event_log, snapshots, proposals, approvals, orders, fills)
+- correlation_id 필드가 관련 테이블에 포함되어 있는지 확인
 - 프로젝트 의존성 설치 테스트
 
 **리스크**:
@@ -116,20 +122,25 @@
 - GUI 모듈 기본 코드
 - Proposal 수신 및 표시 기능
 - 승인/거부 UI 및 로직
-- 승인 토큰 생성 기능
+- 승인 토큰 생성 기능 (JWT 또는 HMAC 서명 형식)
 - 승인 상태 저장 기능
+- Execution Server와의 인터페이스 (승인 토큰 전달, Execution만 키 보유)
 
 **DoD**:
 - [ ] GUI가 Engine의 Proposal을 수신할 수 있음
 - [ ] GUI에서 Proposal을 승인/거부할 수 있음
-- [ ] 승인 시 승인 토큰이 생성됨
+- [ ] 승인 시 승인 토큰이 생성됨 (JWT 또는 HMAC 서명 형식)
+- [ ] 승인 토큰에 proposal_id, 심볼/수량/방향, expires_at, jti가 포함됨
+- [ ] DB에는 승인 토큰 원문이 아닌 token_hash만 저장됨
+- [ ] GUI는 브로커 API 자격증명을 보유하지 않음 (Execution Server만 보유)
 - [ ] 승인/거부 결정이 데이터베이스에 저장됨
 - [ ] 승인된 Proposal만 Execution으로 전달됨
 - [ ] 거부 시 사유가 기록됨
 
 **테스트**:
 - GUI 단위 테스트 (승인/거부 로직)
-- 승인 토큰 생성 테스트
+- 승인 토큰 생성 테스트 (JWT/HMAC 형식, 필수 필드 포함)
+- 토큰 해시 저장 테스트 (원문은 저장되지 않음)
 - 승인 상태 저장 테스트
 - Proposal 전달 테스트
 
@@ -156,21 +167,28 @@
 - 모의투자 환경에서만 동작하도록 제한
 
 **산출물**:
-- Execution 모듈 기본 코드
-- 승인 토큰 검증 로직
+- Execution Server 모듈 기본 코드 (주문 게이트웨이)
+- 승인 토큰 검증 로직 (서버 강제)
 - 주문 실행 로직 (모의투자만)
 - 주문/체결 결과 저장 기능
 - 실거래 API 차단 메커니즘
+- 브로커 API 자격증명 보유 (Execution Server만 보유)
 
 **DoD**:
-- [ ] Execution이 승인 토큰 없이 주문을 시도하면 서버에서 401/403 에러 반환
+- [ ] Execution Server만 브로커(KIS) API 자격증명을 보유함
+- [ ] Engine 및 GUI는 브로커 API 자격증명을 보유하지 않음
+- [ ] Execution Server가 승인 토큰 없이 주문을 시도하면 항상 401/403 에러 반환
+- [ ] 승인 토큰 검증 실패 시 브로커 API 호출이 절대 발생하지 않음 (서버 강제)
 - [ ] 승인된 Proposal만 주문이 실행됨
 - [ ] 모의투자 API만 사용됨 (실거래 API 호출 불가능)
 - [ ] 주문/체결 결과가 데이터베이스에 저장됨
-- [ ] 승인 토큰이 주문과 함께 저장됨
+- [ ] 승인 토큰 사용 시 token_used_at이 기록되고 재사용 불가능함
 
 **테스트**:
-- 승인 토큰 검증 테스트 (토큰 없이 주문 시도 시 실패)
+- **서버 강제 테스트**: 승인 토큰 없이 주문 시도 시 401/403 반환 + 브로커 API 호출 0회 + event_log 기록
+- **토큰 위변조 테스트**: 위변조된 토큰으로 주문 시도 시 401/403 반환 + 브로커 API 호출 0회 + event_log 기록
+- **토큰 만료 테스트**: 만료된 토큰으로 주문 시도 시 401/403 반환 + 브로커 API 호출 0회 + event_log 기록
+- **토큰 재사용 테스트**: 이미 사용된 토큰으로 주문 시도 시 401/403 반환 + 브로커 API 호출 0회 + event_log 기록
 - 승인된 Proposal만 주문 실행되는지 테스트
 - 모의투자 환경 동작 테스트
 - 실거래 API 차단 테스트
@@ -207,21 +225,26 @@
 - 시스템 오류 감지 로직
 - Kill Switch 상태 저장 기능
 - Kill Switch 상태 표시 기능 (GUI)
+- 운영 이벤트/알림/런북 초안 문서 (문서 중심)
 
 **DoD**:
+- [ ] 시스템 시작 시 kill_switch_status=active가 기본값이며, 운영자 수동 해제 + 사유 기록 없이는 주문이 절대 진행되지 않음
 - [ ] MDD -15% 초과 시 자동으로 모든 거래 중단
 - [ ] 데이터 결측 발생 시 자동으로 거래 중단
 - [ ] 시스템 오류 발생 시 자동으로 거래 중단
 - [ ] Kill Switch 상태가 GUI에 표시됨
 - [ ] Kill Switch 해제는 수동으로만 가능 (자동 해제 금지)
-- [ ] Kill Switch 상태가 데이터베이스에 저장됨
+- [ ] Kill Switch 상태 및 해제 사유가 데이터베이스에 저장됨
+- [ ] 운영 이벤트/알림/런북 초안 문서가 작성됨 (문서 중심, 구현은 Phase 1 이후)
 
 **테스트**:
+- 시스템 시작 시 Kill Switch 기본 ON 테스트 (주문 불가능)
+- Kill Switch 수동 해제 + 사유 기록 없이 주문 시도 시 실패 테스트
 - MDD 초과 시 Kill Switch 작동 테스트
 - 데이터 결측 시 Kill Switch 작동 테스트
 - 시스템 오류 시 Kill Switch 작동 테스트
 - Kill Switch 상태 표시 테스트
-- Kill Switch 수동 해제 테스트
+- Kill Switch 수동 해제 + 사유 기록 테스트
 
 **리스크**:
 - Kill Switch 작동 실패
