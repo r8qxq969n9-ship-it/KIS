@@ -94,10 +94,10 @@ class Approval(Base):
 
     approval_id = Column(Integer, primary_key=True, autoincrement=True)
     proposal_id = Column(Integer, ForeignKey("proposals.proposal_id"), nullable=False)
-    token_hash = Column(String(64), nullable=False, index=True)  # Hash only, no raw token
-    token_expires_at = Column(DateTime(timezone=True), nullable=False)
+    token_hash = Column(String(64), nullable=True, index=True)  # Hash only, no raw token (null for rejected)
+    token_expires_at = Column(DateTime(timezone=True), nullable=True)  # null for rejected
     token_used_at = Column(DateTime(timezone=True), nullable=True)
-    token_jti = Column(String(100), nullable=False, unique=True, index=True)
+    token_jti = Column(String(100), nullable=True, unique=True, index=True)  # null for rejected
     status = Column(SQLEnum(ApprovalStatus), nullable=False)
     approved_by = Column(String(100), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)

@@ -128,6 +128,34 @@ $env:PYTHONPATH="src"; python -m kis.engine.run
 
 실행 시 샘플 데이터를 로드하고, snapshot을 저장한 후, Phase 0 고정 파라미터를 만족하는 Proposal을 생성하여 저장합니다.
 
+## GUI 모듈 실행 (P0-003)
+
+FastAPI 기반 GUI 서버를 실행하여 Proposal 조회 및 승인/거부 기능을 제공합니다.
+
+```bash
+# macOS/Linux
+PYTHONPATH=src uvicorn kis.gui.app:app --port 8001
+
+# Windows PowerShell
+$env:PYTHONPATH="src"; uvicorn kis.gui.app:app --port 8001
+```
+
+### API 사용 예시
+
+#### Proposal 승인
+```bash
+curl -X POST "http://localhost:8001/proposals/1/approve" \
+  -H "Content-Type: application/json" \
+  -d '{"approved_by": "admin", "expires_in_seconds": 3600}'
+```
+
+#### Proposal 거부
+```bash
+curl -X POST "http://localhost:8001/proposals/1/reject" \
+  -H "Content-Type: application/json" \
+  -d '{"rejected_by": "admin", "rejection_reason": "Risk too high"}'
+```
+
 ## 테스트 실행
 
 PYTHONPATH를 설정한 후 테스트를 실행합니다.
