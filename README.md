@@ -158,6 +158,45 @@ curl -X POST "http://localhost:8001/proposals/1/reject" \
   -d '{"rejected_by": "admin", "rejection_reason": "Risk too high"}'
 ```
 
+## Execution 모듈 실행 (P0-004)
+
+Execution Server는 승인 토큰 검증 게이트 역할을 합니다.
+
+```bash
+# macOS/Linux
+export EXECUTION_JWT_SECRET="your-secret-key-here"
+PYTHONPATH=src uvicorn kis.execution.app:app --port 8002 --reload
+
+# Windows PowerShell
+$env:EXECUTION_JWT_SECRET="your-secret-key-here"
+$env:PYTHONPATH="src"
+uvicorn kis.execution.app:app --port 8002 --reload
+```
+
+### Execution API 예시 (curl)
+
+**1. 토큰 발급 (GUI에서 호출)**
+```bash
+curl -X POST "http://localhost:8002/issue_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "proposal_id": 1,
+    "correlation_id": "test-correlation-123",
+    "proposal_payload_hash": "abc123...",
+    "expires_in_seconds": 3600
+  }'
+```
+
+**2. 주문 실행 (토큰 필요)**
+```bash
+curl -X POST "http://localhost:8002/place_order" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"order_intent": {"symbol": "AAPL", "quantity": 10}}'
+```
+
+**주의**: `EXECUTION_JWT_SECRET` 환경변수는 반드시 설정해야 하며, 이는 Execution Server만 알고 있는 비밀키입니다.
+
 ## 테스트 실행
 
 PYTHONPATH를 설정한 후 테스트를 실행합니다.
