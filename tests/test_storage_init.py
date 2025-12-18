@@ -5,7 +5,7 @@ import tempfile
 import pytest
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, DatabaseError
 
 from kis.storage.init_db import init_database
 from kis.storage.models import (
@@ -115,21 +115,21 @@ def test_event_log_append_only(temp_db):
         assert event is not None
         event_id = event.event_id
         
-        # Try to UPDATE - should fail
-        with pytest.raises(OperationalError) as exc_info:
-            session.query(EventLog).filter_by(event_id=event_id).update({
-                "event_type": "modified"
-            })
+        # Try to UPDATE using raw SQL - should fail
+        with pytest.raises((OperationalError, DatabaseError)) as exc_info:
+            session.execute(text(f"UPDATE event_log SET event_type = 'modified' WHERE event_id = {event_id}"))
             session.commit()
         
-        assert "UPDATE not allowed" in str(exc_info.value) or "append-only" in str(exc_info.value).lower()
+        error_msg = str(exc_info.value).lower()
+        assert "update not allowed" in error_msg or "append-only" in error_msg
         
-        # Try to DELETE - should fail
-        with pytest.raises(OperationalError) as exc_info:
-            session.query(EventLog).filter_by(event_id=event_id).delete()
+        # Try to DELETE using raw SQL - should fail
+        with pytest.raises((OperationalError, DatabaseError)) as exc_info:
+            session.execute(text(f"DELETE FROM event_log WHERE event_id = {event_id}"))
             session.commit()
         
-        assert "DELETE not allowed" in str(exc_info.value) or "append-only" in str(exc_info.value).lower()
+        error_msg = str(exc_info.value).lower()
+        assert "delete not allowed" in error_msg or "append-only" in error_msg
         
         # Verify the event still exists
         event_after = session.query(EventLog).filter_by(event_id=event_id).first()
