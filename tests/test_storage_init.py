@@ -3,6 +3,7 @@
 import os
 import tempfile
 import pytest
+from datetime import datetime, timezone
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import OperationalError, DatabaseError
@@ -101,7 +102,7 @@ def test_event_log_append_only(temp_db):
     try:
         # Insert a test event
         test_event = EventLog(
-            timestamp="2024-01-01T00:00:00+00:00",
+            timestamp=datetime.now(timezone.utc),
             event_type="test_event",
             correlation_id="test-correlation-1",
             actor="test",
