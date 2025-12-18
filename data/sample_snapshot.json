@@ -1,0 +1,32 @@
+{
+  "asof": "2025-12-18T00:00:00Z",
+  "source": "sample",
+  "universe": [
+    {"symbol": "005930.KS", "market": "KR", "score": 100},
+    {"symbol": "000660.KS", "market": "KR", "score": 99},
+    {"symbol": "035420.KS", "market": "KR", "score": 98},
+    {"symbol": "051910.KS", "market": "KR", "score": 97},
+    {"symbol": "006400.KS", "market": "KR", "score": 96},
+    {"symbol": "035720.KS", "market": "KR", "score": 95},
+    {"symbol": "028260.KS", "market": "KR", "score": 94},
+    {"symbol": "105560.KS", "market": "KR", "score": 93},
+    {"symbol": "207940.KS", "market": "KR", "score": 92},
+    {"symbol": "012330.KS", "market": "KR", "score": 91},
+    {"symbol": "AAPL", "market": "US", "score": 100},
+    {"symbol": "MSFT", "market": "US", "score": 99},
+    {"symbol": "GOOGL", "market": "US", "score": 98},
+    {"symbol": "AMZN", "market": "US", "score": 97},
+    {"symbol": "NVDA", "market": "US", "score": 96},
+    {"symbol": "META", "market": "US", "score": 95},
+    {"symbol": "TSLA", "market": "US", "score": 94},
+    {"symbol": "BRK.B", "market": "US", "score": 93},
+    {"symbol": "V", "market": "US", "score": 92},
+    {"symbol": "JNJ", "market": "US", "score": 91},
+    {"symbol": "WMT", "market": "US", "score": 90},
+    {"symbol": "JPM", "market": "US", "score": 89},
+    {"symbol": "MA", "market": "US", "score": 88},
+    {"symbol": "PG", "market": "US", "score": 87},
+    {"symbol": "UNH", "market": "US", "score": 86}
+  ]
+}
+

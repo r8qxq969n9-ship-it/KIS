@@ -114,6 +114,20 @@ python -m kis.storage.init_db
 - 스키마 버전이 이미 기록되어 있으면 중복 기록하지 않습니다
 - 트리거가 이미 존재하면 재생성합니다
 
+## Engine 모듈 실행 (P0-002)
+
+샘플 데이터로 snapshot을 생성하고 Proposal을 생성하여 데이터베이스에 저장합니다.
+
+```bash
+# macOS/Linux
+PYTHONPATH=src python -m kis.engine.run
+
+# Windows PowerShell
+$env:PYTHONPATH="src"; python -m kis.engine.run
+```
+
+실행 시 샘플 데이터를 로드하고, snapshot을 저장한 후, Phase 0 고정 파라미터를 만족하는 Proposal을 생성하여 저장합니다.
+
 ## 테스트 실행
 
 PYTHONPATH를 설정한 후 테스트를 실행합니다.
