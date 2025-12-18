@@ -345,3 +345,89 @@ def test_token_not_stored_in_db(client, test_proposal, temp_db):
     finally:
         session.close()
 
+
+@respx.mock
+def test_token_issuance_failure(client, test_proposal, temp_db):
+    """Test: Approval Service 실패 시 approve가 502/503 반환하고 DB 변경이 발생하지 않음"""
+    # Mock Approval Service 500 error
+    respx.post("http://localhost:8002/issue_token").mock(
+        return_value=httpx.Response(500, json={"error": "Internal server error"})
+    )
+    
+    # Try to approve proposal
+    response = client.post(
+        f"/proposals/{test_proposal.proposal_id}/approve",
+        json={
+            "approved_by": "test_user",
+            "expires_in_seconds": 3600
+        }
+    )
+    
+    # Should return 502 (Bad Gateway)
+    assert response.status_code == 502
+    assert "Failed to request token issuance" in response.json()['detail']
+    
+    # Verify proposal status is still pending
+    engine = create_engine(temp_db)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        proposal = session.query(Proposal).filter_by(proposal_id=test_proposal.proposal_id).first()
+        assert proposal.status == ProposalStatus.PENDING  # Still pending
+        
+        # Verify no approval record was created
+        approval = session.query(Approval).filter_by(proposal_id=test_proposal.proposal_id).first()
+        assert approval is None  # No approval record
+        
+        # Verify no approval_granted event was logged
+        events = session.query(EventLog).filter_by(
+            event_type="approval_granted",
+            correlation_id="test-correlation-123"
+        ).all()
+        assert len(events) == 0  # No approval_granted event
+    finally:
+        session.close()
+
+
+@respx.mock
+def test_token_issuance_connection_error(client, test_proposal, temp_db):
+    """Test: Approval Service 연결 오류 시 approve가 502 반환하고 DB 변경이 발생하지 않음"""
+    # Mock connection error
+    respx.post("http://localhost:8002/issue_token").mock(
+        side_effect=httpx.ConnectError("Connection refused")
+    )
+    
+    # Try to approve proposal
+    response = client.post(
+        f"/proposals/{test_proposal.proposal_id}/approve",
+        json={
+            "approved_by": "test_user",
+            "expires_in_seconds": 3600
+        }
+    )
+    
+    # Should return 502 (Bad Gateway)
+    assert response.status_code == 502
+    assert "Failed to request token issuance" in response.json()['detail']
+    
+    # Verify proposal status is still pending
+    engine = create_engine(temp_db)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        proposal = session.query(Proposal).filter_by(proposal_id=test_proposal.proposal_id).first()
+        assert proposal.status == ProposalStatus.PENDING  # Still pending
+        
+        # Verify no approval record was created
+        approval = session.query(Approval).filter_by(proposal_id=test_proposal.proposal_id).first()
+        assert approval is None  # No approval record
+        
+        # Verify no approval_granted event was logged
+        events = session.query(EventLog).filter_by(
+            event_type="approval_granted",
+            correlation_id="test-correlation-123"
+        ).all()
+        assert len(events) == 0  # No approval_granted event
+    finally:
+        session.close()
+

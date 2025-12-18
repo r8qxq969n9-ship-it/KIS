@@ -131,8 +131,27 @@ async def approve_proposal(
     token_expires_at_str = token_result['token_expires_at']
     if isinstance(token_expires_at_str, str):
         # Parse ISO8601 string
+        # Handle 'Z' suffix (UTC)
         if token_expires_at_str.endswith('Z'):
-            token_expires_at_str = token_expires_at_str[:-1] + '+00:00'
+            # Remove Z, and if there's already a timezone offset, remove it first
+            base_str = token_expires_at_str[:-1]
+            # Check if it already has timezone offset (+XX:XX or -XX:XX)
+            if '+' in base_str:
+                # Remove existing timezone offset
+                base_str = base_str.rsplit('+', 1)[0]
+            elif base_str.count('-') > 2:
+                # Has timezone offset with -, find last - before timezone
+                parts = base_str.rsplit('-', 1)
+                if len(parts) == 2 and ':' in parts[1]:
+                    base_str = parts[0]
+            token_expires_at_str = base_str + '+00:00'
+        # If already has timezone offset, use as is
+        elif '+' in token_expires_at_str or (token_expires_at_str.count('-') > 2 and 'T' in token_expires_at_str):
+            # Already has timezone, use as is
+            pass
+        else:
+            # No timezone info, assume UTC
+            token_expires_at_str = token_expires_at_str + '+00:00'
         token_expires_at = datetime.fromisoformat(token_expires_at_str)
     else:
         token_expires_at = token_expires_at_str
