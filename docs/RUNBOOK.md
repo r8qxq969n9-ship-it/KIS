@@ -166,10 +166,13 @@ Kill switch를 해제(INACTIVE)하려면 다음 조건을 모두 만족해야 �
 
 ### 2.3 해제 방법
 
-**SQL을 통한 해제**:
+아래 SQL 예시는 **SQLite 기준 예시**입니다. 운영 환경에서 PostgreSQL 등 다른 RDBMS를 사용할 수도 있으며,
+이 경우에는 동일한 논리를 해당 DBMS의 SQL 문법에 맞게 변환해서 사용해야 합니다.
+
+**SQL을 통한 해제 (SQLite 예시)**:
 
 ```sql
--- system_state 테이블에 INACTIVE 레코드 추가
+-- 1) system_state 테이블에 INACTIVE 레코드 추가
 INSERT INTO system_state (
     timestamp,
     kill_switch_status,
@@ -179,45 +182,22 @@ INSERT INTO system_state (
     'inactive',
     '운영자 승인: 모의투자 환경에서 테스트 목적'
 );
-```
 
-**Python 스크립트를 통한 해제**:
-
-```python
-from datetime import datetime, timezone
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from kis.storage.models import SystemState, KillSwitchStatus
-from kis.execution.repository import log_event
-
-# DB 연결
-engine = create_engine("sqlite:///kis_trading.db")
-Session = sessionmaker(bind=engine)
-session = Session()
-
-try:
-    # Kill switch 해제
-    state = SystemState(
-        timestamp=datetime.now(timezone.utc),
-        kill_switch_status=KillSwitchStatus.INACTIVE,
-        kill_switch_reason="운영자 승인: 모의투자 환경에서 테스트 목적"
+-- 2) event_log에 kill_switch_deactivated 이벤트 기록
+INSERT INTO event_log (
+    timestamp,
+    event_type,
+    correlation_id,
+    payload_json
+) VALUES (
+    datetime('now'),
+    'kill_switch_deactivated',
+    'manual-kill-switch-change',
+    json_object(
+        'reason', '운영자 승인: 모의투자 환경에서 테스트 목적',
+        'deactivated_by', 'admin'
     )
-    session.add(state)
-    session.commit()
-    
-    # event_log에 기록
-    log_event(
-        session,
-        "kill_switch_deactivated",
-        "unknown",
-        {
-            "reason": "운영자 승인: 모의투자 환경에서 테스트 목적",
-            "deactivated_by": "admin"
-        }
-    )
-    session.commit()
-finally:
-    session.close()
+);
 ```
 
 ### 2.4 해제 사유 기록 위치
@@ -396,21 +376,17 @@ PYTHONPATH=src python -m kis.engine.run
 
 ### 6.1 Phase 0 제한사항
 
-**Phase 0에서는 절대 실거래하지 않습니다.**
-
-- 모든 주문은 모의투자 환경에서만 실행됩니다.
-- 실제 브로커 API 연동은 Phase 0에서 제외됩니다.
-- 코드 레벨에서 실거래 API 엔드포인트 접근이 차단되어야 합니다.
+**Phase 0에서는 실거래/실주문/실 브로커 API 호출을 포함한 모든 실거래 행위가 전면 금지되며, Spy/Mock/모의 환경에서의 주문 흐름 검증만 허용됩니다.**
 
 ### 6.2 Phase 1 게이트 조건 (향후)
 
-실거래 전환을 위해서는 다음 조건을 모두 만족해야 합니다 (Phase 1+):
+실거래 전환(Phase 1+)은 아래와 같은 **체크리스트를 충족한 경우에만** 가능하며, 이 문서에서는 원칙만 정의합니다.
 
-1. **Kill switch 기본 OFF**: 운영자가 명시적으로 활성화하지 않는 한 기본 비활성화
-2. **운영자 승인 프로세스**: 실거래 전환에 대한 다단계 승인 프로세스
-3. **모니터링 시스템**: 실시간 모니터링 및 알림 시스템 구축
-4. **백테스트 검증**: 충분한 기간의 백테스트 결과 검증
-5. **법적 검토 완료**: 법무팀의 검토 및 승인 완료
+- Kill switch 기본 상태를 OFF로 두되, 비상 시 즉시 ON으로 전환 가능한 절차 확보
+- 실거래 전환/해제를 위한 다단계 운영자 승인 프로세스 구축
+- 실시간 모니터링 및 알림 시스템, 장애 대응 Runbook 정비
+- 충분한 기간의 백테스트/리허설 거래 검증 및 리스크 검토
+- 관련 법규 준수 및 법무/컴플라이언스 부서의 사전 승인
 
 ---
 

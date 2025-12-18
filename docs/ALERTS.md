@@ -24,139 +24,100 @@
 
 ## 알림 트리거 정의
 
-### 1. Kill switch active 상태에서 주문 요청 발생
+아래 트리거들은 모두 **(1) 조건 / (2) 확인 SQL 또는 로그 / (3) 즉시 조치** 세 가지 관점으로 정의됩니다.
 
-**트리거 조건**:
-- `order_blocked_killswitch` 이벤트가 `event_log`에 기록됨
+1. **Kill switch ACTIVE 상태에서 주문 요청 발생**
+   - **조건**: `order_blocked_killswitch` 이벤트가 `event_log`에 기록됨
+   - **확인 SQL**:
 
-**확인 방법**:
-```sql
-SELECT * FROM event_log 
-WHERE event_type = 'order_blocked_killswitch' 
-ORDER BY timestamp DESC 
-LIMIT 10;
-```
+     ```sql
+     SELECT *
+     FROM event_log
+     WHERE event_type = 'order_blocked_killswitch'
+     ORDER BY timestamp DESC
+     LIMIT 10;
+     ```
 
-**대응 절차**:
-1. Kill switch 상태 확인: `system_state` 테이블에서 최신 상태 확인
-2. 의도된 동작인지 확인: 운영자가 의도적으로 Kill switch를 활성화했는지 확인
-3. 필요시 해제: 모의투자 환경에서 테스트 목적이면 해제 절차 진행 (RUNBOOK.md 참조)
+   - **즉시 조치**:
+     - Kill switch 상태 확인: `system_state` 테이블에서 최신 상태 확인
+     - 의도된 동작인지 확인: 운영자가 의도적으로 Kill switch를 활성화했는지 확인
+     - 모의 환경에서의 테스트 목적이라면 RUNBOOK의 Kill switch 해제 절차에 따라 일시 해제 가능
+     - 로그 예시: `[ERROR] Order blocked: Kill switch is active`
 
-**로그 메시지 예시**:
-```
-[ERROR] Order blocked: Kill switch is active
-```
+2. **`order_rejected_*` 이벤트 연속 발생**
+   - **조건**: 일정 시간 내 `order_rejected_*` 이벤트가 N회 이상 발생 (예: 5분 내 10회 이상)
+   - **확인 SQL**:
 
----
+     ```sql
+     -- 최근 5분 내 거부 이벤트 집계
+     SELECT event_type, COUNT(*) AS count
+     FROM event_log
+     WHERE event_type LIKE 'order_rejected%'
+       AND timestamp > datetime('now', '-5 minutes')
+     GROUP BY event_type;
+     ```
 
-### 2. order_rejected_* 이벤트 연속 발생
+   - **즉시 조치**:
+     - `event_log.payload_json`의 `reason` 필드를 확인해 원인 파악
+     - 대표 원인 예:
+       - `invalid_signature`: 토큰 서명 불일치 → JWT_SECRET, 토큰 변조 여부 확인
+       - `expired`: 토큰 만료 → 승인/주문 흐름 시간 설정 재검토, 토큰 재발급
+       - `already used`: 토큰 재사용 시도 → 정상 방어 동작, 클라이언트 로직 점검
+       - `Approval record not found`: 승인 레코드 누락 → 승인 프로세스 및 DB 상태 점검
+     - 반복 발생 시 Execution/GUI 서버 로그를 함께 분석하고, 필요 시 일시적으로 주문 플로우를 중단
 
-**트리거 조건**:
-- 일정 시간 내 `order_rejected_*` 이벤트가 N회 이상 발생 (예: 5분 내 10회 이상)
+3. **DB 초기화 실패 (`init_db` 실패)**
+   - **조건**: `init_db` 실행 시 예외 발생 또는 오류 메시지 출력
+   - **확인 방법**:
+     - `init_db` 실행 터미널의 오류 메시지 및 Python 스택 트레이스 확인
+   - **즉시 조치**:
+     - 오류 메시지에 따라 원인 분류
+       - 파일 권한 문제: DB 파일/디렉터리 쓰기 권한 확인
+       - 스키마 충돌: 기존 DB 파일과 스키마가 맞지 않음 → 개발 환경에서는 DB 파일 삭제 후 재초기화
+       - 의존성 누락: `requirements.txt` 기반 패키지 설치 여부 확인
+     - 문제 해결 후 `init_db` 재실행
+     - 로그 예시: `[ERROR] Database initialization failed: ...`
 
-**확인 방법**:
-```sql
--- 최근 5분 내 거부 이벤트 확인
-SELECT event_type, COUNT(*) as count
-FROM event_log
-WHERE event_type LIKE 'order_rejected%'
-  AND timestamp > datetime('now', '-5 minutes')
-GROUP BY event_type;
-```
+4. **event_log 기록 실패**
+   - **조건**:
+     - `log_event()` 호출 시 예외 발생, 또는
+     - 예상한 이벤트가 `event_log`에 존재하지 않음
+   - **확인 SQL**:
 
-**대응 절차**:
-1. 거부 원인 분석: `event_log.payload_json`에서 `reason` 필드 확인
-2. 일반적인 원인:
-   - `invalid_signature`: 토큰 서명 불일치 → JWT_SECRET 확인
-   - `expired`: 토큰 만료 → 토큰 재발급 필요
-   - `already used`: 토큰 재사용 시도 → 정상 동작 (1회성 토큰)
-   - `Approval record not found`: 승인 레코드 누락 → 승인 프로세스 확인
-3. 근본 원인 해결: 위 원인에 따라 적절한 조치 수행
+     ```sql
+     -- 최근 이벤트 확인
+     SELECT *
+     FROM event_log
+     ORDER BY timestamp DESC
+     LIMIT 20;
 
-**로그 메시지 예시**:
-```
-[WARNING] Order rejected: Invalid token signature
-[WARNING] Order rejected: Token expired
-```
+     -- 특정 이벤트 타입 확인
+     SELECT *
+     FROM event_log
+     WHERE event_type = '<expected_event_type>'
+     ORDER BY timestamp DESC;
+     ```
 
----
+   - **즉시 조치**:
+     - DB 연결 설정 확인 (파일 경로, DATABASE_URL 등)
+     - 트랜잭션 커밋 여부 확인 (`db.commit()` 호출 여부)
+     - 애플리케이션 로그 레벨 및 스택 트레이스 확인
+     - 필요 시 수동으로 event_log에 운영 이벤트를 기록하여 감사 연속성 유지
+     - 로그 예시: `[ERROR] Failed to log event: ...`
 
-### 3. DB 초기화 실패
-
-**트리거 조건**:
-- `init_db` 실행 시 예외 발생 또는 오류 메시지 출력
-
-**확인 방법**:
-- 콘솔 출력에서 오류 메시지 확인
-- Python 예외 스택 트레이스 확인
-
-**대응 절차**:
-1. 오류 메시지 확인: 구체적인 오류 내용 파악
-2. 일반적인 원인:
-   - 파일 권한 문제: DB 파일 생성 권한 확인
-   - 스키마 충돌: 기존 테이블과 충돌 → 기존 DB 파일 삭제 후 재초기화
-   - 의존성 누락: 필요한 Python 패키지 설치 확인
-3. 재시도: 문제 해결 후 `init_db` 재실행
-
-**로그 메시지 예시**:
-```
-[ERROR] Database initialization failed: ...
-```
-
----
-
-### 4. event_log 기록 실패
-
-**트리거 조건**:
-- `log_event()` 함수 호출 시 예외 발생
-- 예상한 이벤트가 `event_log` 테이블에 기록되지 않음
-
-**확인 방법**:
-```sql
--- 최근 이벤트 확인
-SELECT * FROM event_log 
-ORDER BY timestamp DESC 
-LIMIT 20;
-
--- 특정 이벤트 타입 확인
-SELECT * FROM event_log 
-WHERE event_type = '<expected_event_type>' 
-ORDER BY timestamp DESC;
-```
-
-**대응 절차**:
-1. DB 연결 확인: 서비스가 올바른 DB 파일에 연결되어 있는지 확인
-2. 트랜잭션 확인: `db.commit()`이 호출되었는지 확인
-3. 로그 레벨 확인: Python 로그 레벨이 적절히 설정되어 있는지 확인
-4. 수동 기록: 필요시 수동으로 이벤트 기록
-
-**로그 메시지 예시**:
-```
-[ERROR] Failed to log event: ...
-```
-
----
-
-### 5. Token 발급 실패 (502/503)
-
-**트리거 조건**:
-- Execution 서버의 `/issue_token` 엔드포인트가 502 Bad Gateway 또는 503 Service Unavailable 반환
-
-**확인 방법**:
-- GUI 서버 로그에서 502/503 오류 확인
-- Execution 서버 로그에서 상세 오류 확인
-
-**대응 절차**:
-1. Execution 서버 상태 확인: 서버가 정상적으로 실행 중인지 확인
-2. `EXECUTION_JWT_SECRET` 확인: 환경변수가 올바르게 설정되었는지 확인
-3. 네트워크 연결 확인: GUI → Execution 서버 간 네트워크 연결 확인
-4. Execution 서버 재시작: 문제 지속 시 서버 재시작
-
-**로그 메시지 예시**:
-```
-[ERROR] Token issuance failed: 502 Bad Gateway
-[ERROR] Token issuance failed: 503 Service Unavailable
-```
+5. **Token 발급 실패 (502/503)**
+   - **조건**: Execution 서버 `/issue_token` 호출 시 502 Bad Gateway 또는 503 Service Unavailable 반환
+   - **확인 방법**:
+     - GUI 서버 로그에서 승인 요청 시 502/503 응답 코드 확인
+     - Execution 서버 로그에서 해당 시점의 예외/에러 메시지 확인
+   - **즉시 조치**:
+     - Execution 서버 프로세스 상태 확인 (실행 여부, 포트 충돌 등)
+     - `EXECUTION_JWT_SECRET` 환경변수 설정 확인
+     - GUI → Execution 서버 간 네트워크/호스트/포트 설정 확인
+     - 문제가 지속되면 Execution 서버를 재시작하고, 동일 현상 재발 시 원인 분석 완료 전까지 승인/주문 플로우를 일시 중지
+     - 로그 예시:
+       - `[ERROR] Token issuance failed: 502 Bad Gateway`
+       - `[ERROR] Token issuance failed: 503 Service Unavailable`
 
 ---
 

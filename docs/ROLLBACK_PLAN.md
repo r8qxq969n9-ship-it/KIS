@@ -129,23 +129,34 @@ PYTHONPATH=src python -m kis.engine.run
 
 **주의**: 기존 snapshot/proposal은 유지되며, 새로운 레코드가 추가됩니다.
 
-### 부분 롤백
+### 부분 롤백 원칙
 
-특정 테이블만 롤백하는 경우:
+운영(프로덕션) 환경에서는 **DELETE 기반 부분 롤백을 사용하지 않습니다.**
+
+- 기본 원칙은 다음 두 가지 중 하나입니다.
+  - **데이터**: DB 파일 백업 복구(또는 DB 스냅샷 복구)를 사용합니다.
+  - **코드**: `git revert` 또는 `git reset` 등을 통한 커밋 단위 되돌림 + 서비스 재시작을 사용합니다.
+- 운영 DB에서 테이블/레코드를 직접 `DELETE`하는 방식은 **데이터 일관성과 감사 추적을 훼손**하므로 금지합니다.
+
+개발/테스트(로컬, 모의 DB) 환경에서만, 부득이하게 데이터 정리가 필요할 수 있습니다. 이 경우에도 다음 원칙을 반드시 지킵니다.
+
+1. **모의/로컬 DB에서만 수행**: 운영 DB에는 절대 적용하지 않습니다.
+2. **조치 전후 event_log 기록**: 부분 정리/리셋을 수행하기 전후에, 해당 조치의 이유와 범위를 `event_log`에 운영 이벤트로 남깁니다.
+3. **데이터 일관성 확인**: `correlation_id`를 기준으로 관련 테이블 간 일관성을 다시 점검합니다.
+
+예시(로컬 개발 DB 전용, 운영 금지):
 
 ```sql
--- 특정 테이블 삭제 (주의: event_log는 append-only이므로 삭제 불가)
-DELETE FROM proposals WHERE proposal_id > <last_valid_id>;
-DELETE FROM approvals WHERE approval_id > <last_valid_id>;
-DELETE FROM orders WHERE order_id > <last_valid_id>;
-
--- 또는 특정 조건으로 삭제
+-- [개발/테스트 전용] 예시: 특정 시점 이후 Proposal/Approval/Order 제거
+-- event_log는 append-only이므로 삭제 금지
 DELETE FROM proposals WHERE created_at > '<rollback_timestamp>';
+DELETE FROM approvals WHERE created_at > '<rollback_timestamp>';
+DELETE FROM orders    WHERE created_at > '<rollback_timestamp>';
 ```
 
-**주의**: 
+**주의**:
 - `event_log` 테이블은 append-only이므로 삭제할 수 없습니다.
-- 부분 롤백은 신중하게 수행해야 하며, 데이터 일관성을 확인해야 합니다.
+- 부분 롤백(DELETE 기반 정리)은 오직 모의/로컬 DB에서만 사용하며, 항상 event_log에 조치 내역을 남겨야 합니다.
 
 ---
 
