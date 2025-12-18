@@ -45,13 +45,18 @@
 **DoD**:
 - [ ] 3단 아키텍처 디렉토리 구조가 생성됨
 - [ ] 데이터베이스 스키마가 PHASE0_SPEC.md의 스키마 초안을 반영함
+- [ ] DB 마이그레이션/초기화는 멱등(idempotent)이며 2회 실행해도 실패하지 않는다
 - [ ] event_log 테이블이 correlation_id, event_type, actor, payload_json 필드를 포함함
+- [ ] event_log는 append-only 전제로 UPDATE/DELETE 경로가 존재하지 않는다(테스트로 확인)
 - [ ] proposals 테이블이 universe_snapshot_id, config_hash, git_commit_sha, schema_version 필드를 포함함
 - [ ] approvals 테이블이 token_hash, token_expires_at, token_used_at, token_jti 필드를 포함함
 - [ ] orders/fills 테이블이 correlation_id, payload_json 필드를 포함함
+- [ ] system_state 테이블이 존재하며 kill_switch_status 필드를 포함함
+- [ ] schema_version이 존재하고 초기화 시점에 기록된다(테스트로 확인)
 - [ ] 데이터베이스 초기화 스크립트가 정상 실행됨
 - [ ] 프로젝트 의존성이 명시되어 있고 설치 가능함
 - [ ] 기본 설정 파일이 생성됨
+- [ ] .gitignore에 .env, secrets/, 키/토큰 패턴이 포함되어 비밀정보 커밋이 방지된다
 
 **테스트**:
 - 데이터베이스 초기화 스크립트 실행 테스트
@@ -74,32 +79,34 @@
 **제목**: Engine 모듈 기본 구현 (Proposal 생성)
 
 **목적**:
-- 시장 데이터를 분석하여 Proposal을 생성하는 Engine 모듈 구현
+- 샘플/모의 데이터를 입력으로 Proposal을 생성하는 Engine 모듈 구현
 - Phase 0 고정 파라미터(연변동성 12%, MDD -15%, 최대 20종목 등)를 반영한 Proposal 생성 로직
-- 모의투자 환경에서 사용 가능한 시장 데이터 수집
+- Phase 0에서는 외부 시장데이터 API 연동을 하지 않는다. 대신 샘플/모의 데이터(파일 또는 고정 JSON)로 snapshot을 생성·저장하고, 그 snapshot을 입력으로 Proposal을 생성한다
 
 **산출물**:
 - Engine 모듈 기본 코드
 - Proposal 생성 로직
-- 시장 데이터 수집 기능
-- 데이터 스냅샷 저장 기능
+- 샘플/모의 데이터 처리 기능
+- 데이터 스냅샷 저장 기능 (샘플 데이터 기반)
 - Proposal 데이터 모델
 
 **DoD**:
-- [ ] Engine이 시장 데이터를 수집할 수 있음
+- [ ] 샘플/모의 데이터(파일 또는 고정 JSON)로 snapshot을 생성할 수 있음
+- [ ] 생성된 snapshot을 입력으로 Proposal을 생성할 수 있음
 - [ ] Engine이 고정 파라미터를 반영하여 Proposal을 생성할 수 있음
 - [ ] 생성된 Proposal이 최대 20종목, 종목당 8% 제한을 준수함
 - [ ] 생성된 Proposal이 KR/US 40/60 비율을 준수함
 - [ ] Proposal이 데이터베이스에 저장됨
-- [ ] 시장 데이터 스냅샷이 저장됨
+- [ ] 시장 데이터 스냅샷(샘플 데이터 기반)이 저장됨
 
 **테스트**:
 - Engine 단위 테스트 (Proposal 생성 로직)
+- 샘플 데이터로 snapshot 생성 테스트
 - 파라미터 제한 준수 테스트 (20종목, 8% 할당, 40/60 비율)
 - 데이터 저장 테스트
 
 **리스크**:
-- 시장 데이터 API 연동 실패
+- 샘플 데이터 품질 및 구조 문제
 - Proposal 생성 로직 오류
 
 **영향범위**:
@@ -115,23 +122,23 @@
 **목적**:
 - Engine에서 생성된 Proposal을 수신하고 표시하는 GUI 구현
 - Proposal 승인/거부 기능 구현
-- 승인 시 승인 토큰 생성 및 Execution으로 전달
+- 승인 결정 후 Execution Server(또는 Approval Service)에 토큰 발급을 요청
 - 거부 시 사유 기록
 
 **산출물**:
 - GUI 모듈 기본 코드
 - Proposal 수신 및 표시 기능
 - 승인/거부 UI 및 로직
-- 승인 토큰 생성 기능 (JWT 또는 HMAC 서명 형식)
+- Execution Server와의 인터페이스 (토큰 발급 요청, Execution만 서명키 보유)
 - 승인 상태 저장 기능
-- Execution Server와의 인터페이스 (승인 토큰 전달, Execution만 키 보유)
 
 **DoD**:
 - [ ] GUI가 Engine의 Proposal을 수신할 수 있음
 - [ ] GUI에서 Proposal을 승인/거부할 수 있음
-- [ ] 승인 시 승인 토큰이 생성됨 (JWT 또는 HMAC 서명 형식)
+- [ ] 승인 결정 후 Execution Server(또는 Approval Service)에 토큰 발급을 요청함
+- [ ] 토큰은 서버에서 서명되어 반환되며, GUI는 토큰 원문을 저장하지 않고 token_hash만 저장함
+- [ ] GUI는 토큰 서명키를 보유하지 않음
 - [ ] 승인 토큰에 proposal_id, 심볼/수량/방향, expires_at, jti가 포함됨
-- [ ] DB에는 승인 토큰 원문이 아닌 token_hash만 저장됨
 - [ ] GUI는 브로커 API 자격증명을 보유하지 않음 (Execution Server만 보유)
 - [ ] 승인/거부 결정이 데이터베이스에 저장됨
 - [ ] 승인된 Proposal만 Execution으로 전달됨
@@ -139,7 +146,7 @@
 
 **테스트**:
 - GUI 단위 테스트 (승인/거부 로직)
-- 승인 토큰 생성 테스트 (JWT/HMAC 형식, 필수 필드 포함)
+- 토큰 발급 요청 테스트 (서버에 요청하고 서명된 토큰을 받는지 확인)
 - 토큰 해시 저장 테스트 (원문은 저장되지 않음)
 - 승인 상태 저장 테스트
 - Proposal 전달 테스트
@@ -189,6 +196,7 @@
 - **토큰 위변조 테스트**: 위변조된 토큰으로 주문 시도 시 401/403 반환 + 브로커 API 호출 0회 + event_log 기록
 - **토큰 만료 테스트**: 만료된 토큰으로 주문 시도 시 401/403 반환 + 브로커 API 호출 0회 + event_log 기록
 - **토큰 재사용 테스트**: 이미 사용된 토큰으로 주문 시도 시 401/403 반환 + 브로커 API 호출 0회 + event_log 기록
+- **브로커 호출 0회 증명**: 브로커 클라이언트를 Mock/Spy로 래핑하여 호출 카운트를 assert 하거나, 브로커 호출 함수가 실행될 경우 테스트가 즉시 실패하도록 구성한다
 - 승인된 Proposal만 주문 실행되는지 테스트
 - 모의투자 환경 동작 테스트
 - 실거래 API 차단 테스트
