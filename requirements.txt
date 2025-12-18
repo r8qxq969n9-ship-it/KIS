@@ -1,0 +1,12 @@
+# KIS Trading System - Phase 0
+# Python dependencies
+
+# Database
+SQLAlchemy>=2.0.0,<3.0.0
+
+# Testing
+pytest>=7.4.0,<8.0.0
+
+# Environment variables (optional, for .env support)
+python-dotenv>=1.0.0,<2.0.0
+
