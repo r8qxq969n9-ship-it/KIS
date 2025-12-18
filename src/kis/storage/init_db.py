@@ -14,32 +14,27 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///kis_trading.db")
 
 def create_event_log_triggers(engine):
     """Create append-only triggers for event_log table (SQLite)"""
-    # Check if triggers already exist
-    inspector = inspect(engine)
-    
     # SQLite-specific: Create triggers to prevent UPDATE/DELETE on event_log
-    trigger_sql = """
-    -- Drop existing triggers if they exist (idempotent)
-    DROP TRIGGER IF EXISTS prevent_event_log_update;
-    DROP TRIGGER IF EXISTS prevent_event_log_delete;
+    # SQLite requires executing one statement at a time
     
-    -- Create trigger to prevent UPDATE
-    CREATE TRIGGER prevent_event_log_update
+    trigger_statements = [
+        "DROP TRIGGER IF EXISTS prevent_event_log_update",
+        "DROP TRIGGER IF EXISTS prevent_event_log_delete",
+        """CREATE TRIGGER prevent_event_log_update
     BEFORE UPDATE ON event_log
     BEGIN
         SELECT RAISE(ABORT, 'event_log is append-only: UPDATE not allowed');
-    END;
-    
-    -- Create trigger to prevent DELETE
-    CREATE TRIGGER prevent_event_log_delete
+    END""",
+        """CREATE TRIGGER prevent_event_log_delete
     BEFORE DELETE ON event_log
     BEGIN
         SELECT RAISE(ABORT, 'event_log is append-only: DELETE not allowed');
-    END;
-    """
+    END""",
+    ]
     
     with engine.connect() as conn:
-        conn.execute(text(trigger_sql))
+        for statement in trigger_statements:
+            conn.execute(text(statement))
         conn.commit()
 
 
