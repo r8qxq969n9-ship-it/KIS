@@ -70,9 +70,18 @@ git checkout <tag-name>
 ### 롤백 후 조치
 
 1. **서비스 재시작**: 코드 변경사항 적용을 위해 모든 서비스 재시작
-   - GUI 서버 재시작
-   - Execution 서버 재시작
-   - Engine 모듈 재실행 (필요시)
+
+```bash
+# GUI 서버 재시작
+PYTHONPATH=src uvicorn kis.gui.app:app --port 8001 --reload
+
+# Execution 서버 재시작
+export EXECUTION_JWT_SECRET="your-secret-key-here"
+PYTHONPATH=src uvicorn kis.execution.app:app --port 8002 --reload
+
+# Engine 모듈 재실행 (필요시)
+PYTHONPATH=src python -m kis.engine.run
+```
 
 2. **기능 확인**: 롤백된 버전에서 정상 작동 확인
 
@@ -105,14 +114,16 @@ cp kis_trading.db kis_trading.db.backup
 1. **모든 서비스 중지**: GUI, Execution 서버 중지
 
 2. **현재 DB 파일 백업** (선택사항):
-   ```bash
-   cp kis_trading.db kis_trading.db.current.backup
-   ```
+
+```bash
+cp kis_trading.db kis_trading.db.current.backup
+```
 
 3. **백업 파일로 교체**:
-   ```bash
-   cp kis_trading.db.backup kis_trading.db
-   ```
+
+```bash
+cp kis_trading.db.backup kis_trading.db
+```
 
 4. **서비스 재시작**: GUI, Execution 서버 재시작
 
@@ -129,14 +140,20 @@ PYTHONPATH=src python -m kis.engine.run
 
 **주의**: 기존 snapshot/proposal은 유지되며, 새로운 레코드가 추가됩니다.
 
-### 부분 롤백 원칙
+---
 
-운영(프로덕션) 환경에서는 **DELETE 기반 부분 롤백을 사용하지 않습니다.**
+## 부분 롤백 원칙
+
+### 운영 환경 원칙
+
+**운영(프로덕션) 환경에서는 DELETE 기반 부분 롤백을 사용하지 않습니다.**
 
 - 기본 원칙은 다음 두 가지 중 하나입니다.
   - **데이터**: DB 파일 백업 복구(또는 DB 스냅샷 복구)를 사용합니다.
   - **코드**: `git revert` 또는 `git reset` 등을 통한 커밋 단위 되돌림 + 서비스 재시작을 사용합니다.
 - 운영 DB에서 테이블/레코드를 직접 `DELETE`하는 방식은 **데이터 일관성과 감사 추적을 훼손**하므로 금지합니다.
+
+### 개발/테스트 환경 예시
 
 개발/테스트(로컬, 모의 DB) 환경에서만, 부득이하게 데이터 정리가 필요할 수 있습니다. 이 경우에도 다음 원칙을 반드시 지킵니다.
 
@@ -144,7 +161,7 @@ PYTHONPATH=src python -m kis.engine.run
 2. **조치 전후 event_log 기록**: 부분 정리/리셋을 수행하기 전후에, 해당 조치의 이유와 범위를 `event_log`에 운영 이벤트로 남깁니다.
 3. **데이터 일관성 확인**: `correlation_id`를 기준으로 관련 테이블 간 일관성을 다시 점검합니다.
 
-예시(로컬 개발 DB 전용, 운영 금지):
+**⚠️ 운영 금지: 아래 예시는 개발/테스트 환경 전용입니다.**
 
 ```sql
 -- [개발/테스트 전용] 예시: 특정 시점 이후 Proposal/Approval/Order 제거
@@ -294,8 +311,18 @@ WHERE proposal_id = <proposal_id>;
 **상황**: 최근 커밋에서 버그 발견, 이전 커밋으로 롤백 필요
 
 **절차**:
-1. 현재 커밋 확인: `git log --oneline -n 5`
-2. 이전 커밋으로 롤백: `git reset --hard <previous-commit>`
+1. 현재 커밋 확인
+
+```bash
+git log --oneline -n 5
+```
+
+2. 이전 커밋으로 롤백
+
+```bash
+git reset --hard <previous-commit>
+```
+
 3. 서비스 재시작
 4. 기능 확인
 
@@ -304,8 +331,18 @@ WHERE proposal_id = <proposal_id>;
 **상황**: 특정 기능만 롤백하고 나머지는 유지
 
 **절차**:
-1. 해당 기능의 커밋 확인: `git log --oneline --grep="<feature-name>"`
-2. revert 사용: `git revert <commit-hash>`
+1. 해당 기능의 커밋 확인
+
+```bash
+git log --oneline --grep="<feature-name>"
+```
+
+2. revert 사용
+
+```bash
+git revert <commit-hash>
+```
+
 3. 서비스 재시작
 4. 기능 확인
 
@@ -315,8 +352,18 @@ WHERE proposal_id = <proposal_id>;
 
 **절차**:
 1. 모든 서비스 중지
-2. DB 파일 백업: `cp kis_trading.db kis_trading.db.current.backup`
-3. 백업 파일로 교체: `cp kis_trading.db.backup kis_trading.db`
+2. DB 파일 백업
+
+```bash
+cp kis_trading.db kis_trading.db.current.backup
+```
+
+3. 백업 파일로 교체
+
+```bash
+cp kis_trading.db.backup kis_trading.db
+```
+
 4. 서비스 재시작
 5. 데이터 확인
 
@@ -346,4 +393,3 @@ WHERE proposal_id = <proposal_id>;
 - **Runbook**: `docs/RUNBOOK.md`
 - **알림 가이드**: `docs/ALERTS.md`
 - **사양서**: `docs/PHASE0_SPEC.md`
-

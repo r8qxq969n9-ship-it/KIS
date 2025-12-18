@@ -101,30 +101,33 @@ uvicorn kis.execution.app:app --port 8002 --reload
 **단계별 절차**:
 
 1. **Proposal 조회**
-   ```bash
-   curl http://localhost:8001/proposals
-   ```
+
+```bash
+curl http://localhost:8001/proposals
+```
 
 2. **Proposal 승인**
-   ```bash
-   curl -X POST "http://localhost:8001/proposals/1/approve" \
-     -H "Content-Type: application/json" \
-     -d '{"approved_by": "admin", "expires_in_seconds": 3600}'
-   ```
 
-   **동작**:
-   - GUI가 Execution Server의 `/issue_token` 엔드포인트에 토큰 발급 요청
-   - Execution Server가 JWT 토큰 생성 및 반환
-   - GUI가 `approvals` 테이블에 `token_hash`만 저장 (원문 토큰은 저장하지 않음)
-   - `proposals.status`를 `approved`로 업데이트
-   - `event_log`에 `approval_granted` 이벤트 기록
+```bash
+curl -X POST "http://localhost:8001/proposals/1/approve" \
+  -H "Content-Type: application/json" \
+  -d '{"approved_by": "admin", "expires_in_seconds": 3600}'
+```
+
+**동작**:
+- GUI가 Execution Server의 `/issue_token` 엔드포인트에 토큰 발급 요청
+- Execution Server가 JWT 토큰 생성 및 반환
+- GUI가 `approvals` 테이블에 `token_hash`만 저장 (원문 토큰은 저장하지 않음)
+- `proposals.status`를 `approved`로 업데이트
+- `event_log`에 `approval_granted` 이벤트 기록
 
 3. **Proposal 거부 (선택)**
-   ```bash
-   curl -X POST "http://localhost:8001/proposals/1/reject" \
-     -H "Content-Type: application/json" \
-     -d '{"rejected_by": "admin", "rejection_reason": "Risk too high"}'
-   ```
+
+```bash
+curl -X POST "http://localhost:8001/proposals/1/reject" \
+  -H "Content-Type: application/json" \
+  -d '{"rejected_by": "admin", "rejection_reason": "Risk too high"}'
+```
 
 ### 1.6 주문 요청 (모의투자 환경)
 
@@ -166,8 +169,7 @@ Kill switch를 해제(INACTIVE)하려면 다음 조건을 모두 만족해야 �
 
 ### 2.3 해제 방법
 
-아래 SQL 예시는 **SQLite 기준 예시**입니다. 운영 환경에서 PostgreSQL 등 다른 RDBMS를 사용할 수도 있으며,
-이 경우에는 동일한 논리를 해당 DBMS의 SQL 문법에 맞게 변환해서 사용해야 합니다.
+아래 SQL 예시는 **SQLite 기준 예시**입니다. 운영 환경에서 PostgreSQL 등 다른 RDBMS를 사용할 수도 있으며, 이 경우에는 동일한 논리를 해당 DBMS의 SQL 문법에 맞게 변환해서 사용해야 합니다.
 
 **SQL을 통한 해제 (SQLite 예시)**:
 
@@ -235,7 +237,12 @@ INSERT INTO system_state (
 
 **조치**:
 1. `data/sample_snapshot.json` 파일 확인
-2. Engine 모듈 재실행: `PYTHONPATH=src python -m kis.engine.run`
+2. Engine 모듈 재실행
+
+```bash
+PYTHONPATH=src python -m kis.engine.run
+```
+
 3. `event_log`에서 `proposal_created` 이벤트 확인
 
 ### 3.2 DB 잠김
@@ -262,12 +269,14 @@ INSERT INTO system_state (
 **증상**: Proposal 승인 또는 주문 실행 실패
 
 **조치**:
-1. `event_log` 테이블에서 관련 이벤트 확인:
-   ```sql
-   SELECT * FROM event_log 
-   WHERE correlation_id = '<correlation_id>' 
-   ORDER BY timestamp DESC;
-   ```
+1. `event_log` 테이블에서 관련 이벤트 확인
+
+```sql
+SELECT * FROM event_log 
+WHERE correlation_id = '<correlation_id>' 
+ORDER BY timestamp DESC;
+```
+
 2. `proposals` 테이블에서 Proposal 상태 확인
 3. `approvals` 테이블에서 승인 레코드 확인
 4. Execution 서버 로그에서 상세 오류 확인
@@ -327,9 +336,9 @@ PYTHONPATH=src uvicorn kis.execution.app:app --port 8002 --reload
 
 ## 5. 롤백 절차
 
-### 5.1 코드 롤백
+상세한 롤백 절차는 `docs/ROLLBACK_PLAN.md`를 참조하세요.
 
-**특정 커밋으로 되돌리기**:
+### 5.1 코드 롤백 (요약)
 
 ```bash
 # 커밋 히스토리 확인
@@ -338,37 +347,23 @@ git log --oneline
 # 특정 커밋으로 되돌리기
 git checkout <commit-hash>
 
-# 또는 특정 태그로 되돌리기
-git checkout <tag-name>
+# 또는 revert 사용 (안전한 롤백)
+git revert <commit-hash>
 ```
 
 **주의**: 코드 롤백 후에는 서비스를 재시작해야 변경사항이 적용됩니다.
 
-### 5.2 DB 백업/교체
-
-**백업**:
+### 5.2 데이터 롤백 (요약)
 
 ```bash
-# SQLite 파일 백업
+# DB 파일 백업
 cp kis_trading.db kis_trading.db.backup
-```
 
-**복구**:
-
-```bash
-# 백업 파일로 교체
+# 백업 파일로 복구
 cp kis_trading.db.backup kis_trading.db
 ```
 
 **주의**: DB 파일 교체 시 모든 서비스를 중지한 후 진행해야 합니다.
-
-### 5.3 스냅샷 재생성
-
-Engine 모듈을 재실행하여 새로운 snapshot과 proposal을 생성합니다:
-
-```bash
-PYTHONPATH=src python -m kis.engine.run
-```
 
 ---
 
@@ -449,10 +444,9 @@ PYTHONPATH=src python -m kis.engine.run
 
 ---
 
-## 9. 연락처 및 참고 자료
+## 참고 자료
 
-- **사양서**: `docs/PHASE0_SPEC.md`
 - **알림 가이드**: `docs/ALERTS.md`
 - **롤백 계획**: `docs/ROLLBACK_PLAN.md`
+- **사양서**: `docs/PHASE0_SPEC.md`
 - **README**: `README.md`
-
