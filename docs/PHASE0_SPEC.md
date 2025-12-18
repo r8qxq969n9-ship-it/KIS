@@ -114,31 +114,31 @@ Phase 0 완료를 위해서는 다음 게이트를 모두 통과해야 합니다
 - [ ] 데이터 스냅샷이 저장되는지 확인
 - [ ] 저장된 데이터로 재현 가능한지 확인
 
-## 6. Definition of Done (DoD)
+## 7. Definition of Done (DoD)
 
 Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 
-### 6.1 아키텍처 DoD
+### 7.1 아키텍처 DoD
 - [ ] Engine 모듈이 독립적으로 Proposal을 생성할 수 있음
 - [ ] GUI 모듈이 Engine의 Proposal을 수신하고 승인/거부 결정을 내릴 수 있음
 - [ ] Execution 모듈이 승인 토큰/승인 상태 없이는 주문 API를 호출할 수 없음 (서버 레벨 차단)
 - [ ] 세 모듈 간 통신이 명확한 인터페이스로 정의되어 있음
 
-### 6.2 승인 시스템 DoD
+### 7.2 승인 시스템 DoD
 - [ ] GUI에서 승인한 Proposal만 Execution으로 전달됨
-- [ ] 승인 토큰이 생성되고 Execution에 전달됨
+- [ ] 승인 토큰이 발급되고 Execution에 전달됨
 - [ ] 승인 토큰은 서명된 형식(JWT 또는 HMAC 서명 토큰)이며 proposal_id 및 주문 대상(심볼/수량/방향)과 바인딩된다
 - [ ] 승인 토큰은 expires_at(만료)와 jti(토큰 ID)를 가지며 1회성(one-time)으로만 사용 가능하다(재사용 시 403)
 - [ ] DB에는 승인 토큰 원문을 저장하지 않고 token_hash만 저장한다
 - [ ] Execution이 승인 토큰 없이 주문을 시도하면 서버에서 401/403 에러 반환
 - [ ] 승인 상태가 데이터베이스에 저장됨
 
-### 6.3 모의투자 DoD
+### 7.3 모의투자 DoD
 - [ ] 실거래 API 엔드포인트에 접근할 수 없음 (코드 레벨 차단 또는 설정 차단)
 - [ ] 모의투자 API만 사용됨
 - [ ] 모의투자 환경에서 주문/체결이 정상 동작함
 
-### 6.4 Kill Switch DoD
+### 7.4 Kill Switch DoD
 - [ ] 시스템 시작 시 kill_switch_status=active가 기본값이며, 운영자 수동 해제 + 사유 기록 없이는 주문이 절대 진행되지 않는다
 - [ ] Execution Server는 주문 엔드포인트에서 kill_switch_status=active인 경우 항상 403을 반환하며, 이 경우 브로커 API 호출이 절대 발생하지 않는다(서버 강제)
 - [ ] 손실이 MDD(-15%)를 초과하면 자동으로 모든 거래 중단
@@ -147,17 +147,17 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - [ ] Kill switch 상태가 GUI에 표시됨
 - [ ] Kill switch 해제는 수동으로만 가능 (자동 해제 금지)
 
-### 6.5 데이터 저장/감사 DoD
+### 7.5 데이터 저장/감사 DoD
 - [ ] 모든 주요 상태 변화는 append-only 이벤트 로그로 저장(삭제/수정 금지). correlation_id로 Proposal→승인→주문→체결을 연결한다
 - [ ] Proposal/주문/체결 레코드는 생성 당시 git_commit_sha(또는 build_version), schema_version, config_hash를 함께 저장한다
 - [ ] 시장 데이터 스냅샷이 타임스탬프와 함께 저장됨
 - [ ] 모든 Proposal이 생성 시점, 파라미터, 내용과 함께 저장됨
 - [ ] 모든 승인/거부 결정이 결정자, 시점, 이유와 함께 저장됨
-- [ ] 모든 주문이 주문 시점, 승인 토큰, 결과와 함께 저장됨
+- [ ] 모든 주문이 주문 시점, 승인 토큰 해시(token_hash), 결과와 함께 저장됨
 - [ ] 모든 체결이 체결 시점, 가격, 수량과 함께 저장됨
 - [ ] 저장된 데이터로 특정 시점의 상태를 재현할 수 있음
 
-### 6.6 운영 파라미터 DoD
+### 7.6 운영 파라미터 DoD
 - [ ] 연변동성 12%가 코드/설정에 명시되어 있음
 - [ ] MDD -15%가 코드/설정에 명시되어 있음
 - [ ] 최대 20종목 제한이 코드에 구현되어 있음
@@ -165,18 +165,18 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - [ ] KR/US 40/60 비율이 코드에 구현되어 있음
 - [ ] Phase 0에서는 월 1회 리밸런싱 트리거(또는 수동 실행 워크플로우)만 정의하고, Proposal 생성과 승인/집행 파이프라인 검증까지만 수행한다
 
-### 6.7 테스트 DoD
+### 7.7 테스트 DoD
 - [ ] 각 모듈의 단위 테스트가 작성됨
 - [ ] 통합 테스트가 작성됨 (Engine → GUI → Execution 플로우)
 - [ ] 승인 없이 주문 시도 시 실패하는 테스트가 작성됨
 - [ ] Kill switch 작동 테스트가 작성됨
 - [ ] 데이터 저장/조회 테스트가 작성됨
 
-## 7. 데이터 스키마 초안
+## 8. 데이터 스키마 초안
 
 재현성과 감사를 위해 다음 데이터를 저장해야 합니다. 모든 주요 상태 변화는 append-only 이벤트 로그로 저장되며, correlation_id로 Proposal→승인→주문→체결을 연결합니다.
 
-### 7.1 이벤트 로그 (event_log)
+### 8.1 이벤트 로그 (event_log)
 - `event_id`: 고유 ID
 - `timestamp`: 이벤트 발생 시점
 - `event_type`: 이벤트 유형 (proposal_created, approval_granted, order_placed, fill_executed 등)
@@ -186,13 +186,13 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - `prev_hash`: 이전 이벤트 해시 (선택, 체인 검증용)
 - `hash`: 현재 이벤트 해시 (선택, 무결성 검증용)
 
-### 7.2 데이터 스냅샷 (snapshots)
+### 8.2 데이터 스냅샷 (snapshots)
 - `snapshot_id`: 고유 ID
 - `asof`: 스냅샷 기준 시점
 - `source`: 데이터 출처
 - `payload_json`: 스냅샷 데이터 (JSON)
 
-### 7.3 Proposal (proposals)
+### 8.3 Proposal (proposals)
 - `proposal_id`: 고유 ID
 - `created_at`: 생성 시점
 - `universe_snapshot_id`: 사용된 시장 데이터 스냅샷 ID
@@ -202,7 +202,7 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - `payload_json`: Proposal 내용 JSON (종목, 비중, 거래 유형 등)
 - `status`: 상태 (pending, approved, rejected, executed)
 
-### 7.4 승인 (approvals)
+### 8.4 승인 (approvals)
 - `approval_id`: 고유 ID
 - `proposal_id`: 관련 Proposal ID
 - `token_hash`: 승인 토큰의 해시값 (원문은 저장하지 않음)
@@ -214,7 +214,7 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - `approved_at`: 승인 시점
 - `rejection_reason`: 거부 시 사유 (nullable)
 
-### 7.5 주문 (orders)
+### 8.5 주문 (orders)
 - `order_id`: 고유 ID
 - `correlation_id`: Proposal→승인→주문을 연결하는 상관관계 ID
 - `status`: 주문 상태 (pending, filled, cancelled, rejected)
@@ -222,7 +222,7 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - `payload_json`: 주문 상세 정보 (JSON: proposal_id, approval_id, symbol, quantity, price, order_type 등)
 - `created_at`: 주문 생성 시점
 
-### 7.6 체결 (fills)
+### 8.6 체결 (fills)
 - `fill_id`: 고유 ID
 - `order_id`: 관련 주문 ID
 - `correlation_id`: Proposal→승인→주문→체결을 연결하는 상관관계 ID
@@ -230,7 +230,7 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - `payload_json`: 체결 상세 정보 (JSON: executed_price, executed_quantity, executed_at 등)
 - `created_at`: 체결 시점
 
-### 7.7 시스템 상태 (system_state)
+### 8.7 시스템 상태 (system_state)
 - `state_id`: 고유 ID
 - `timestamp`: 상태 기록 시점
 - `kill_switch_status`: Kill switch 상태 (active, inactive)
@@ -239,22 +239,22 @@ Phase 0 완료를 위한 구체적이고 테스트 가능한 기준입니다.
 - `current_mdd`: 현재 MDD
 - `active_positions`: 현재 보유 종목 수
 
-## 8. 제약사항 및 경고
+## 9. 제약사항 및 경고
 
-### 8.1 실거래 금지
+### 9.1 실거래 금지
 - Phase 0에서는 실거래 API를 사용할 수 없습니다.
 - 실거래 API 엔드포인트에 대한 접근은 코드 레벨 또는 설정 레벨에서 차단되어야 합니다.
 
-### 8.2 수익 보장 표현 금지
+### 9.2 수익 보장 표현 금지
 - 모든 문서, 코드 주석, 로그 메시지, 사용자 인터페이스에서 수익 보장 관련 표현을 사용하지 않습니다.
 - 예: "수익을 보장합니다", "이익을 납니다", "돈을 벌 수 있습니다" 등
 
-### 8.3 운영 안전장치
+### 9.3 운영 안전장치
 - Phase 0에서는 기본적인 Kill switch만 구현합니다.
 - 고급 운영 안전장치(상세 로깅, 알림 시스템, 롤백 메커니즘, 재시작 Runbook)는 Phase 1 이후에 구현됩니다.
 - **운영 안전장치가 완성되기 전까지는 실거래를 진행할 수 없습니다.**
 
-## 9. 향후 고려 사항
+## 10. 향후 고려 사항
 
 Phase 0 완료 후 향후 단계에서 고려할 수 있는 항목들입니다. Phase 0에서는 이러한 항목들을 구현하지 않습니다.
 
