@@ -55,6 +55,7 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
 kis_trading.db
 
 # Temporary files

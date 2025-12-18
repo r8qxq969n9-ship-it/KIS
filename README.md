@@ -23,24 +23,67 @@ KIS_trading/
 └── README.md                 # 이 파일
 ```
 
-## 설치
+## 설치 및 실행
 
 ### 1. Python 환경 설정
 
 Python 3.8 이상이 필요합니다.
 
-### 2. 의존성 설치
+### 2. 가상 환경 생성 및 활성화 (권장)
+
+```bash
+# 가상 환경 생성
+python3 -m venv venv
+
+# 가상 환경 활성화
+# macOS/Linux:
+source venv/bin/activate
+# Windows:
+# venv\Scripts\activate
+```
+
+### 3. 의존성 설치
 
 ```bash
 pip install -r requirements.txt
 ```
 
+### 4. PYTHONPATH 설정
+
+이 프로젝트는 `src/` 레이아웃을 사용하므로, 모듈을 임포트하기 위해 PYTHONPATH를 설정해야 합니다.
+
+**macOS/Linux:**
+```bash
+export PYTHONPATH=src
+```
+
+**Windows PowerShell:**
+```powershell
+$env:PYTHONPATH="src"
+```
+
+**주의**: PYTHONPATH 설정 없이 실행하면 `ModuleNotFoundError: No module named 'kis'` 오류가 발생할 수 있습니다.
+
+> **향후 고려**: editable install 방식(pip install -e .)을 사용하면 PYTHONPATH 설정 없이도 사용할 수 있지만, 이는 pyproject.toml/setup.py가 필요하므로 Phase 0에서는 환경변수 방식을 사용합니다.
+
 ## 데이터베이스 초기화
 
 ### 기본 사용법 (SQLite)
 
+PYTHONPATH를 설정한 후:
+
 ```bash
 python -m kis.storage.init_db
+```
+
+또는 PYTHONPATH를 명령어와 함께 지정:
+
+```bash
+# macOS/Linux
+PYTHONPATH=src python -m kis.storage.init_db
+
+# Windows PowerShell
+$env:PYTHONPATH="src"; python -m kis.storage.init_db
 ```
 
 또는 Python 코드에서:
@@ -73,28 +116,50 @@ python -m kis.storage.init_db
 
 ## 테스트 실행
 
-### 모든 테스트 실행
+PYTHONPATH를 설정한 후 테스트를 실행합니다.
+
+### 모든 테스트 실행 (간단한 출력)
 
 ```bash
-pytest
+pytest -q
+```
+
+### 모든 테스트 실행 (상세 출력)
+
+```bash
+pytest -v
 ```
 
 ### 특정 테스트 파일 실행
 
 ```bash
-pytest tests/test_storage_init.py
-```
-
-### 상세 출력과 함께 실행
-
-```bash
-pytest -v
+pytest tests/test_storage_init.py -v
 ```
 
 ### 테스트 커버리지 확인
 
 ```bash
 pytest --cov=src/kis/storage
+```
+
+### 빠른 시작 예시
+
+```bash
+# 1. 가상 환경 생성 및 활성화
+python3 -m venv venv
+source venv/bin/activate  # macOS/Linux
+
+# 2. 의존성 설치
+pip install -r requirements.txt
+
+# 3. PYTHONPATH 설정
+export PYTHONPATH=src  # macOS/Linux
+
+# 4. 데이터베이스 초기화
+python -m kis.storage.init_db
+
+# 5. 테스트 실행
+pytest -q
 ```
 
 ## 데이터베이스 스키마
